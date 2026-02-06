@@ -1,0 +1,28 @@
+# Activer le moteur de réécriture
+RewriteEngine On
+RewriteBase /
+
+# ------------------------------
+# 1. Rediriger les URLs .php vers sans extension
+# ------------------------------
+RewriteCond %{THE_REQUEST} \s/([^.]+)\.php [NC]
+RewriteRule ^ %1 [R=301,L]
+
+# ------------------------------
+# 2. Rediriger /Dashboard vers /dashboard (insensible à la casse)
+# ------------------------------
+RewriteMap lc int:tolower
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^([a-zA-Z0-9_-]+)$ $1.php [L]
+
+# ------------------------------
+# 3. Empêcher lister les répertoires
+# ------------------------------
+Options -Indexes
+
+# ------------------------------
+# 4. Définir index.php par défaut
+# ------------------------------
+DirectoryIndex index.php
