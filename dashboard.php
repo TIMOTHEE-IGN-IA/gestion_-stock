@@ -5,7 +5,6 @@ if (!isset($_SESSION['user'])) {
     header("Location: index.php");
     exit;
 }
-$user = $_SESSION['user'];
 
 $user = $_SESSION['user'];
 
@@ -19,6 +18,9 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 // ===== AJOUTÉ juste après $user = $_SESSION['user']; =====
 $isAdmin   = ($user['role'] === 'Admin');
 $isEmploye = in_array(strtolower($user['role']), ['employe', 'employer', 'employé']);
+$isControle = ($user['role'] === 'Controle');
+
+
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -498,7 +500,7 @@ body.sidebar-open .mobile-hamburger span:nth-child(3) {
 <?php if ($isAdmin): ?>
 <a href="#" class="menu-toggle" data-target="produits-submenu">
     <i class="bi bi-boxes"></i>
-    <span class="label">Produits</span>
+    <span class="label">Commandes</span>
 </a>
 <div class="submenu" id="produits-submenu">
     <a href="produit/add.php" class="ajax-link"><i class="bi bi-plus-circle"></i><span class="label">Ajouter</span></a>
@@ -506,6 +508,7 @@ body.sidebar-open .mobile-hamburger span:nth-child(3) {
 </div>
 <?php endif; ?>
 
+<?php if ($isAdmin || $isEmploye): ?>
 <!-- VENTES – toggle d’abord, puis sous-menu -->
 <a href="#" class="menu-toggle" data-target="ventes-submenu">
     <i class="bi bi-cash-stack"></i>
@@ -523,33 +526,61 @@ body.sidebar-open .mobile-hamburger span:nth-child(3) {
     <a href="produit/vente.php" class="ajax-link">
         <i class="bi bi-receipt"></i>
         <span class="label">Au comptoir</span>
-        <a href="produit/Historiquev.php" class="ajax-link">
+    </a>
+
+    <a href="produit/Historiquev.php" class="ajax-link">
         <i class="bi bi-clock-history"></i>
         <span class="label">Historique</span>
     </a>
-    </a>
-    
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
-<!-- GESTION DE STOCK – uniquement Admin -->
+
+
 <?php if ($isAdmin): ?>
-<a href="#" class="menu-toggle" data-target="stock-submenu">
-    <i class="bi bi-arrow-left-right"></i>
-    <span class="label">Gestion Stock</span>
+    <a href="#" class="menu-toggle" data-target="depenses-submenu">
+    <i class="bi bi-boxes"></i>
+    <span class="label">Comptable Pme</span>
 </a>
 
-<div class="submenu" id="stock-submenu">
-    <a href="produit/stock.php" class="ajax-link">
-        <i class="bi bi-box-arrow-in-down"></i>
-        <span class="label">Entrée/Sortie</span>
-    </a>
-    <a href="produit/historique.php" class="ajax-link">
-        <i class="bi bi-clock-history"></i>
-        <span class="label">Historique</span>
-    </a>
+<div class="submenu" id="depenses-submenu">
+    <a href="produit/jour.php" class="ajax-link">Depense J/M</a>
+    <a href="produit/credit.php" class="ajax-link">Crédit</a>
+     <a href="produit/liste-credit.php" class="ajax-link">liste-credit</a>
+
+
+    <a href="produit/employe.php" class="ajax-link"> Gestion-Employe</a>
+    
 </div>
 <?php endif; ?>
+
+<!-- ENTREPRISE – UNIQUEMENT pour Controle (Nova) -->
+<?php if ($isControle): ?>
+    <a href="#" class="menu-toggle" data-target="entreprise-submenu">
+        <i class="bi bi-building"></i>
+        <span class="label">Entreprise</span>
+    </a>
+    <div class="submenu" id="entreprise-submenu">
+        <a href="entreprise/add.php" class="ajax-link">
+            <i class="bi bi-plus-circle"></i>
+            <span class="label">Ajouter</span>
+        </a>
+        <a href="entreprise/list.php" class="ajax-link">
+            <i class="bi bi-list-check"></i>
+            <span class="label">Liste</span>
+        </a>
+    </div>
+<?php endif; ?>
+
+
+<?php if ($isControle): ?>
+<a href="controle/dashboard.php" class="ajax-link">
+    <i class="bi bi-shield-check"></i>
+    <span class="label">Nova Contrôle</span>
+</a>
+<?php endif; ?>
+
 
 
 <!-- PARAMÈTRES -->
@@ -586,13 +617,15 @@ body.sidebar-open .mobile-hamburger span:nth-child(3) {
 <div id="mainContentWrapper">
     <?php
     if ($isAdmin) {
-       include __DIR__ . "/produit/dashboard_content.php";
-
+        include __DIR__ . "/produit/dashboard_content.php";
+    } elseif ($isControle) {
+        include __DIR__ . "/controle/dashboard.php";
     } else {
-        include "produit/vente.php";
+        include __DIR__ . "/produit/vente.php";
     }
     ?>
 </div>
+
 
 <script>
 // Variables globales pour les fonctions du sidebar
@@ -692,13 +725,26 @@ document.addEventListener('submit', function(e){
         'historiqueForm':'produit/historique.php', 
         'add-product-form':'produit/add.php', 
         'venteForm':'produit/vente.php',
+          'depenseForm':'produit/jour.php',
+           'creditForm':'produit/credit.php', 
+           'ListeForm':'produit/liste-credit.php', 
+            
     };
     
     if(forms[e.target.id]){
         e.preventDefault();
         const formId = e.target.id;
         const url = forms[formId];
-        const isPost = formId === 'add-product-form' || formId === 'venteForm';
+      const isPost = 
+    formId === 'add-product-form' || 
+    formId === 'venteForm' || 
+    formId === 'depenseForm' ||
+    formId === 'creditForm'||
+    formId === 'ListeForm';
+   
+
+
+
         
         console.log('Soumission formulaire:', formId, 'vers', url);
         
@@ -718,13 +764,74 @@ document.addEventListener('submit', function(e){
             headers: isPost ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' }
         })
         .then(response => {
-            if (!response.ok) {
-                throw new Error(`Erreur HTTP: ${response.status}`);
-            }
-            return response.text();
-        })
-        .then(html => {
-            document.getElementById('mainContentWrapper').innerHTML = html;
+    if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+    }
+
+    const contentType = response.headers.get("content-type");
+
+    if (contentType && contentType.includes("application/json")) {
+        return response.json();
+    }
+
+    return response.text();
+})
+.then(data => {
+
+    // 🔥 Si réponse JSON (credit.php)
+    if (typeof data === "object") {
+
+    const messageDiv = document.getElementById('message');
+
+    if (messageDiv) {
+        messageDiv.innerHTML = `
+            <div class="alert alert-${data.status === 'success' ? 'success' : 'danger'} alert-dismissible fade show">
+                ${data.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    }
+
+    if (data.status === 'success') {
+
+        // ✅ Reset formulaire
+        e.target.reset();
+
+        // ✅ Ajouter nouvelle ligne au tableau
+        const tbody = document.querySelector('#creditsTable tbody');
+        if (tbody) {
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td>--</td>
+                <td>${data.client}</td>
+                <td>${data.libelle}</td>
+                <td>${Number(data.montant).toLocaleString('fr-FR')} F</td>
+                <td>${data.date}</td>
+            `;
+            tbody.prepend(newRow);
+        }
+
+        // ✅ Mettre à jour total
+        const totalSpan = document.getElementById('totalCredits');
+        if (totalSpan) {
+            totalSpan.innerHTML = 
+                `Total crédits du mois : ${Number(data.total).toLocaleString('fr-FR')} F`;
+        }
+    }
+
+    // ✅ Réactiver bouton
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = submitBtn.dataset.originalText || 'Enregistrer';
+    }
+
+    showLoading(false);
+    return;
+}
+
+    // Sinon HTML normal
+    document.getElementById('mainContentWrapper').innerHTML = data;
+
             
             // Réactiver le bouton après succès
             if (submitBtn) {
@@ -970,6 +1077,21 @@ document.addEventListener('click', function(e) {
     'edit-product-form':'produit/edit.php'
 };
         return;
+    }
+});
+</script>
+<script>
+document.addEventListener("click", function(e) {
+    if (e.target.classList.contains("btn-recu")) {
+
+        const id = e.target.dataset.id;
+        const isDue = e.target.dataset.due === "1";
+
+        if (isDue) {
+            alert("⚠️ Ce crédit est échue ! Veuillez contacter le client.");
+        }
+
+        window.open("produit/recu_credit_fpdf.php?id=" + id, "_blank");
     }
 });
 </script>

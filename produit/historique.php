@@ -68,39 +68,7 @@ $historiques = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <h3>📦 Historique des mouvements</h3>
 
-    <!-- Formulaire de filtre -->
-    <form id="historiqueForm" class="row g-3 mb-4">
-        <div class="col-md-3">
-            <select name="produit_id" class="form-select">
-                <option value="">-- Tous les produits --</option>
-                <?php foreach ($produits as $p): ?>
-                    <option value="<?= $p['id'] ?>" <?= $produit_id == $p['id'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($p['nom']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="col-md-2">
-            <select name="type" class="form-select">
-                <option value="">-- Tous --</option>
-                <option value="Entree" <?= $type === 'Entree' ? 'selected' : '' ?>>Entrée</option>
-                <option value="Sortie" <?= $type === 'Sortie' ? 'selected' : '' ?>>Sortie</option>
-            </select>
-        </div>
-
-        <div class="col-md-2">
-            <input type="date" name="date_debut" value="<?= $date_debut ?>" class="form-control">
-        </div>
-
-        <div class="col-md-2">
-            <input type="date" name="date_fin" value="<?= $date_fin ?>" class="form-control">
-        </div>
-
-        <div class="col-md-3">
-            <button type="submit" class="btn btn-primary w-100">Filtrer</button>
-        </div>
-    </form>
+   
 
     <!-- Tableau -->
     <div class="table-responsive">
@@ -136,34 +104,55 @@ $historiques = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script>
-// Fonction pour filtrer via AJAX
+// Fonction pour initialiser le formulaire AJAX
 function initHistoriqueForm() {
     const form = document.getElementById('historiqueForm');
     if (!form) return;
 
-    form.addEventListener('submit', function(e){
+    form.addEventListener('submit', function(e) {
         e.preventDefault();
 
         const formData = new FormData(form);
-        const params = new URLSearchParams();
-        for(const [k,v] of formData.entries()) if(v) params.append(k,v);
+        const url = new URL(window.location.href);
 
-        fetch('produit/historique.php?' + params.toString())
-            .then(res => res.text())
+        // Mettre à jour les paramètres de l'URL actuelle
+        for (const [key, value] of formData.entries()) {
+            if (value) {
+                url.searchParams.set(key, value);
+            } else {
+                url.searchParams.delete(key);
+            }
+        }
+
+        // Charger la nouvelle version
+        fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error('Erreur réseau : ' + response.status);
+                return response.text();
+            })
             .then(html => {
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 const newContainer = doc.querySelector('#historiqueContainer');
-                const oldContainer = document.getElementById('historiqueContainer');
-                if(newContainer && oldContainer) oldContainer.replaceWith(newContainer);
 
-                // Réinitialiser le formulaire AJAX sur le nouveau DOM
-                initHistoriqueForm();
+                if (newContainer) {
+                    const oldContainer = document.getElementById('historiqueContainer');
+                    if (oldContainer) {
+                        oldContainer.replaceWith(newContainer);
+                    }
+                    // Ré-attacher le listener sur le nouveau formulaire
+                    initHistoriqueForm();
+                } else {
+                    console.error("Conteneur #historiqueContainer non trouvé dans la réponse");
+                }
             })
-            .catch(err => console.error(err));
+            .catch(err => {
+                console.error('Erreur AJAX :', err);
+                alert('Une erreur est survenue lors du filtrage. Veuillez réessayer.');
+            });
     });
 }
 
-// Initialiser si page chargée directement
-initHistoriqueForm();
+// Lancer au chargement de la page
+document.addEventListener('DOMContentLoaded', initHistoriqueForm);
 </script>

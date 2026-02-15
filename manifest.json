@@ -1,19 +1,20 @@
 {
   "name": "Nova Stock",
   "short_name": "NovaStock",
-  "description": "Application de gestion de stock et ventes",
-  "start_url": "/dashboard.php",
+  "start_url": "/index.php",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#00A651",
-  "theme_color": "#00A651",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "nova.png",
+      "src": "/icon-192.png.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "nova.png",
+      "src": "/icon-512.png.png",
       "sizes": "512x512",
       "type": "image/png"
     }

@@ -11,14 +11,14 @@ $message = '';
 $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nom           = trim($_POST['nom'] ?? '');
-    $description   = trim($_POST['description'] ?? '');
-    $categorie     = trim($_POST['categorie'] ?? '');
-    $quantite      = (int)($_POST['quantite'] ?? 0);
-    $prix_unitaire = (float)($_POST['prix'] ?? 0);
-    $prix_achat    = (float)($_POST['prix_achat'] ?? 0);
-    $fournisseur   = trim($_POST['fournisseur'] ?? '');
-    $stock_alerte  = (int)($_POST['stock_alerte'] ?? 5); // nouveau champ
+    $nom         = trim($_POST['nom'] ?? '');
+    $description = trim($_POST['description'] ?? '');
+    $categorie   = trim($_POST['categorie'] ?? '');
+    $quantite    = (int)($_POST['quantite'] ?? 0);
+    $prix_unitaire = (float) str_replace([' ', ','], ['', '.'], $_POST['prix'] ?? 0);
+    $prix_achat  = (float) str_replace([' ', ','], ['', '.'], $_POST['prix_achat'] ?? 0);
+    $fournisseur = trim($_POST['fournisseur'] ?? '');
+    $stock_alerte = (int)($_POST['stock_alerte'] ?? 5);
 
     $errors = [];
     if (empty($nom) || strlen($nom) < 2) $errors[] = "Nom du produit obligatoire (≥ 2 caractères).";
@@ -31,78 +31,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($stock_alerte < 0) $errors[] = "Seuil d'alerte stock ne peut pas être négatif.";
 
     if (empty($errors)) {
-        try {
-            $connexion->beginTransaction();
-            $stmt = $connexion->prepare("SELECT derniere_valeur FROM compteur_code WHERE id = 1 FOR UPDATE");
-            $stmt->execute();
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$row) throw new Exception("Compteur de codes introuvable.");
-            $nouveau_numero = (int)$row['derniere_valeur'] + 1;
-            $code = sprintf("PROD-%04d", $nouveau_numero);
-            $stmt = $connexion->prepare("UPDATE compteur_code SET derniere_valeur = ? WHERE id = 1");
-            $stmt->execute([$nouveau_numero]);
+        // ... (le reste du code avant le try reste identique)
 
-           // Ajout du user_id
-$sql = "INSERT INTO produit 
-        (code, nom, description, categorie, quantite, prix_unitaire, prix_achat, fournisseur, stock_alerte, user_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-$stmt = $connexion->prepare($sql);
-$stmt->execute([
-    $code,
-    $nom,
-    $description ?: null,
-    $categorie,
-    $quantite,
-    $prix_unitaire,
-    $prix_achat,
-    $fournisseur ?: null,
-    $stock_alerte,
-    $_SESSION['user']['id'] // <-- ici
-]);
+try {
+    $connexion->beginTransaction();
 
+    // Insertion du produit SANS code
+    $stmt = $connexion->prepare(
+        "INSERT INTO produit 
+         (nom, description, categorie, quantite, prix_unitaire, prix_achat, fournisseur, stock_alerte, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+    $stmt->execute([
+        $nom,
+        $description ?: null,
+        $categorie,
+        $quantite,
+        $prix_unitaire,
+        $prix_achat,
+        $fournisseur ?: null,
+        $stock_alerte,
+        $_SESSION['user']['id']
+    ]);
 
-            $connexion->commit();
-            $success = true;
+    // Récupération de l'ID
+    $new_id = $connexion->lastInsertId();
 
-            $message = "
-            <div class='alert alert-success alert-dismissible fade show shadow-sm' role='alert'>
-                <i class='bi bi-check-circle-fill me-3 fs-4'></i>
-                <div>
-                    <strong>Produit ajouté avec succès !</strong><br>
-                    <span class='d-block mt-1'>
-                        <strong>{$nom}</strong> – <span class='badge bg-info ms-1'>{$categorie}</span><br>
-                        Code : <strong class='font-monospace'>{$code}</strong>
-                    </span>
-                    <hr class='my-2 opacity-50'>
-                    <small>
-                        Qté : <strong>" . number_format($quantite) . "</strong> |
-                        Seuil alerte : <strong>{$stock_alerte}</strong> unités |
-                        Achat : <strong>" . number_format($prix_achat, 2, ',', ' ') . " FCFA</strong> |
-                        Vente : <strong>" . number_format($prix_unitaire, 2, ',', ' ') . " FCFA</strong>
-                    </small>
-                </div>
-                <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
-            </div>";
+    // Code au format COM N° ID (sans zéros)
+    $code = "COM N° " . $new_id;
 
-            $_POST = []; // reset formulaire
-        } catch (Exception $e) {
-            $connexion->rollBack();
-            $message = "
-            <div class='alert alert-danger alert-dismissible fade show shadow-sm' role='alert'>
-                <i class='bi bi-exclamation-triangle-fill me-3 fs-4'></i>
-                <strong>Erreur :</strong> " . htmlspecialchars($e->getMessage()) . "
-                <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
-            </div>";
-        }
-    } else {
-        $message = "
-        <div class='alert alert-warning alert-dismissible fade show shadow-sm' role='alert'>
-            <i class='bi bi-exclamation-circle-fill me-3 fs-4'></i>
-            <strong>Attention :</strong>
-            <ul class='mb-0 mt-2 ps-4'>" . implode('', array_map(fn($e) => "<li>$e</li>", $errors)) . "</ul>
-            <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
-        </div>";
-    }
+    // Mise à jour du code
+    $connexion->prepare("UPDATE produit SET code = ? WHERE id = ?")
+              ->execute([$code, $new_id]);
+
+    $connexion->commit();
+
+    $success = true;
+    $message = "
+    <div class='alert alert-success alert-dismissible fade show shadow-lg' role='alert' style='border-left: 6px solid #198754;'>
+        <h5 class='alert-heading mb-3'>
+            <i class='bi bi-check-circle-fill me-2 fs-4'></i>
+            Produit ajouté avec succès !
+        </h5>
+        <div class='ps-4'>
+            <strong>Produit :</strong> {$nom}<br>
+            <strong>Code généré :</strong> <span class='badge bg-primary font-monospace'>{$code}</span><br>
+            <strong>Catégorie :</strong> {$categorie}<br>
+            <strong>Stock initial :</strong> " . number_format($quantite) . " unités<br>
+            <strong>Seuil d'alerte :</strong> {$stock_alerte} unités<br>
+            <strong>Prix d'achat :</strong> " . number_format($prix_achat, 0, ',', ' ') . " FCFA<br>
+            <strong>Prix de vente :</strong> " . number_format($prix_unitaire, 0, ',', ' ') . " FCFA<br>
+            <strong>Marge brute potentielle (unitaire) :</strong> " . number_format($prix_unitaire - $prix_achat, 0, ',', ' ') . " FCFA<br>
+            <small class='text-muted d-block mt-2'>Ajouté par : {$_SESSION['user']['nom']} – " . date('d/m/Y H:i:s') . "</small>
+        </div>
+        <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
+    </div>";
+
+    $_POST = []; // reset formulaire
+
+} catch (Exception $e) {
+    $connexion->rollBack();
+    $message = "
+    <div class='alert alert-danger alert-dismissible fade show shadow-sm' role='alert'>
+        <i class='bi bi-exclamation-triangle-fill me-3 fs-4'></i>
+        <strong>Erreur :</strong> " . htmlspecialchars($e->getMessage()) . "
+        <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
+    </div>";
+}
+}
 }
 ?>
 
@@ -114,18 +110,15 @@ $stmt->execute([
     <title>Ajouter Produit – Nova Stock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Ton style reste identique, je ne le répète pas ici -->
 </head>
 <body>
 <div class="card-form">
     <div class="card-header text-center">
-        <h1><i class="bi bi-plus-circle-fill me-2 btn btn-primary flex-fill"></i>&nbsp<b>  Ajouter un Produit</b></font></h1>
+        <h1><i class="bi bi-plus-circle-fill me-2 btn btn-primary flex-fill"></i>&nbsp<b> Enregistrer une commande</b></font></h1>
         <p>Remplissez les informations ci-dessous pour enregistrer un nouveau produit</p>
     </div>
-
     <div class="card-body">
         <?= $message ?>
-
         <form id="add-product-form" method="POST" class="needs-validation" novalidate>
             <!-- Nom -->
             <div class="mb-4">
@@ -137,7 +130,6 @@ $stmt->execute([
                            required maxlength="100" placeholder="Ex : Poudre à canon 42,5">
                 </div>
             </div>
-
             <!-- Description -->
             <div class="mb-4">
                 <label for="description" class="form-label">Description</label>
@@ -147,7 +139,6 @@ $stmt->execute([
                               placeholder="Détails, caractéristiques, usage..."><?= htmlspecialchars($_POST['description'] ?? '') ?></textarea>
                 </div>
             </div>
-
             <!-- Catégorie -->
             <div class="mb-4">
                 <label for="categorie" class="form-label">Catégorie *</label>
@@ -165,7 +156,6 @@ $stmt->execute([
                     </select>
                 </div>
             </div>
-
             <!-- Quantité initiale -->
             <div class="mb-4">
                 <label for="quantite" class="form-label">Stock *</label>
@@ -176,22 +166,19 @@ $stmt->execute([
                     <span class="input-group-text currency-unit">unités</span>
                 </div>
             </div>
-
-            <!-- Nouveau champ : Stock alerte -->
+            <!-- Seuil d'alerte -->
             <div class="mb-4">
                 <label for="stock_alerte" class="form-label">Seuil d'alerte stock</label>
                 <div class="input-group">
                     <span class="input-group-text form-icon"><i class="bi bi-bell-fill"></i></span>
                     <input type="number" class="form-control" id="stock_alerte" name="stock_alerte"
-                           min="0" value="<?= htmlspecialchars($_POST['stock_alerte'] ?? '5') ?>" 
-                           <?= !isset($_POST['stock_alerte']) ? 'disabled' : '' ?>> <!-- grisé par défaut -->
+                           min="0" value="<?= htmlspecialchars($_POST['stock_alerte'] ?? '5') ?>">
                     <span class="input-group-text currency-unit">unités</span>
                 </div>
                 <small class="form-text text-muted">
                     Valeur par défaut : 5 unités (quand le stock ≤ cette valeur → alerte)
                 </small>
             </div>
-
             <!-- Prix -->
             <div class="price-group mb-4">
                 <div>
@@ -199,7 +186,7 @@ $stmt->execute([
                     <div class="input-group">
                         <span class="input-group-text form-icon"><i class="bi bi-arrow-down-circle"></i></span>
                         <input type="number" step="0.01" class="form-control" id="prix_achat" name="prix_achat"
-                               min="0" value="<?= htmlspecialchars($_POST['prix_achat'] ?? '') ?>" required>
+                               min="0" value="<?= htmlspecialchars($_POST['prix_achat'] ?? '') ?>">
                         <span class="input-group-text currency-unit">FCFA</span>
                     </div>
                 </div>
@@ -213,7 +200,6 @@ $stmt->execute([
                     </div>
                 </div>
             </div>
-
             <!-- Fournisseur -->
             <div class="mb-4">
                 <label for="fournisseur" class="form-label">Fournisseur</label>
@@ -224,7 +210,6 @@ $stmt->execute([
                            placeholder="Ex : SODICAM, CFAO, ...">
                 </div>
             </div>
-
             <!-- Actions -->
             <div class="d-flex gap-3 mt-5">
                 <button type="submit" class="btn btn-primary flex-fill" id="submitBtn">
@@ -245,24 +230,21 @@ $stmt->execute([
 document.addEventListener('DOMContentLoaded', () => {
     const pa = document.getElementById('prix_achat');
     const pv = document.getElementById('prix');
-    
+   
     const checkPrices = () => {
         const vA = parseFloat(pa.value) || 0;
         const vV = parseFloat(pv.value) || 0;
         pv.classList.toggle('is-warning', vV > 0 && vA > 0 && vV <= vA);
     };
-
     pa.addEventListener('input', checkPrices);
     pv.addEventListener('input', checkPrices);
     checkPrices();
-
     // Soumission formulaire → anti double-clic
     document.getElementById('add-product-form').addEventListener('submit', e => {
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
         document.getElementById('btnText').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enregistrement...';
     });
-
     // Auto-close alertes succès
     document.querySelectorAll('.alert-success').forEach(alert => {
         setTimeout(() => bootstrap.Alert.getOrCreateInstance(alert).close(), 7000);

@@ -16,11 +16,19 @@ $stmt->execute([$nom, $password]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if ($user) {
+
     $_SESSION['user'] = [
         'id'   => $user['id'],
         'nom'  => $user['nom'],
         'role' => $user['role']
     ];
+
+    // ✅ SEUL l'admin avec mot de passe k2z
+    if ($user['role'] === 'Admin' && $password === 'k2z') {
+        $_SESSION['depenses_access'] = true;
+    } else {
+        unset($_SESSION['depenses_access']);
+    }
 
     header("Location: ../dashboard.php");
     exit;
